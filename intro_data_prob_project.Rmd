@@ -1,0 +1,168 @@
+---
+title: "Exploring the BRFSS data"
+author: "Nitesh"
+date: "8th September"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Synopsys
+
+The Behavioral Risk Factor Surveillance System (BRFSS) is a collaborative project between all of the states in the United States (US) and participating US territories and the Centers for Disease Control and Prevention (CDC). The BRFSS is administered and supported by CDC's Population Health Surveillance Branch, under the Division of Population Health at the National Center for Chronic Disease Prevention and Health Promotion. BRFSS is an ongoing surveillance system designed to measure behavioral risk factors for the non-institutionalized adult population (18 years of age and older) residing in the US. The BRFSS was initiated in 1984, with 15 states collecting surveillance data on risk behaviors through monthly telephone interviews. Over time, the number of states participating in the survey increased; by 2001, 50 states, the District of Columbia, Puerto Rico, Guam, and the US Virgin Islands were participating in the BRFSS. Today, all 50 states, the District of Columbia, Puerto Rico, and Guam collect data annually and American Samoa, Federated States of Micronesia, and Palau collect survey data over a limited point- in-time (usually one to three months). In this document, the term "state" is used to refer to all areas participating in BRFSS, including the District of Columbia, Guam, and the Commonwealth of Puerto Rico.
+
+Key features of the study :
+
+* The following study is meant for those US states participating in BRFSS.
+
+* The observations made in this study can only be generalized to the 53 states in US.The data is randomly sampled as random phone calls were made to collect the data and hence the dataset is generalizable to the population of US only.
+
+* Research question 1 and 3 don't show any causal link between variables while question 2 does tend to show some causal link but the casuality cannot be assured.
+
+* The data can be considered biasless as the data was collected over telephone and  not face to face. Although there were some data which were misinterpreted and entered incorrectly but that is human error and cannot be considered as biasing.
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+### Load data
+
+Firstly the `file.exists()` function checks wether the required dataset i.e. `brfss2013.Rdata` is present in the current working directory or not. If the file is not found in that directory, the required file is downloaded from the given URL. Next the dataset is loaded into the R workspace for analysis. 
+
+```{r load-data,cache=TRUE}
+if(!file.exists("brfss2013.RData"))
+{
+    url <- "https://d3c33hcgiwev3.cloudfront.net/_384b2d9eda4b29131fb681b243a7767d_brfss2013.RData?Expires=1473379200&Signature=Jl0XCES-dsS7knYIywta3bIoDTORqG3Mph4BqtqjygtWLAMfZDJhDkRIls~6hGO7Qewgg2tur7Q1i6ecMvBr5MmmdSQM9b52WhtkFrhNHI8lmobLUa~ycNdphoGaXm5yX2rQBKdmWpFhG5Gr5TJIXokeU6k1tYZ0NHNzmb7NT9Q_&Key-Pair-Id=APKAJLTNE6QMUY6HBC5A"
+    download.file(url,"brfss2013.Rdata",method=curl)
+}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+### Studying the data
+
+```{r}
+#Reading column names
+names(brfss2013)
+```
+Different states for which the data has been collected
+
+```{r}
+unique(brfss2013$X_state)
+```
+
+It can be seen that there are 2 states having invalid names 80 and 0. The row corresponding to these values must be removed, thus removing the required rows
+
+```{r}
+brfss2013 <- brfss2013[brfss2013$X_state != '80',]
+brfss2013 <- brfss2013[brfss2013$X_state != '0',]
+```
+
+Years for which the data has been collected
+
+```{r}
+unique(brfss2013$iyear)
+```
+
+Calculating the number of NA values in each column
+
+```{r}
+colSums(is.na(brfss2013))
+```
+
+Removing columns where more than 50% of the data contain NA values as those columns hardly provides any information regarding that particular variable
+
+```{r}
+brfss2013 <- brfss2013[,colSums(is.na(brfss2013))<0.5*nrow(brfss2013)]
+```
+Now the dataset is ready for further study.
+
+* * *
+
+## Part 2: Research questions
+
+**Research quesion 1:** What are the average sleeping hours for adults in each state ? Also name the state with adults having least sleeping hours.
+
+**Research quesion 2:** Is there a distinct difference in the health of smokers to non-smokers ?
+
+**Research quesion 3:** How many adults are satisfied with the care received ?
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+**Research quesion 1:**
+
+This question provides answer to the sleeping habits in different states of US which might help is studying about psycological state of any subject under consideration.
+
+Creating a new dataset named `sleepingHours` which stores the information about sleeping hours for each state. Another data frame named `stateCount` holds the count each state present in the `brfss2013` dataset.
+
+```{r}
+sleepingHours <- aggregate(brfss2013$sleptim1,by = list(brfss2013$X_state),sum,na.rm=TRUE)
+stateCount <- as.data.frame(table(brfss2013$X_state))
+sleepingHours <-merge(sleepingHours,stateCount,by.x='Group.1',by.y = 'Var1')
+sleepingHours$averageTime<-sleepingHours$x/sleepingHours$Freq
+```
+
+Plot showing average sleeping hours for adults of each state
+
+```{r}
+ggplot(sleepingHours,aes(Group.1,averageTime)) + geom_point() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab("State") + ylab("Average Sleeping Hours") + ggtitle("Average Sleeping Hours For Each State")
+```
+
+
+
+State with highest average sleeping hour
+
+```{r}
+sleepingHours[sleepingHours$averageTime==max(sleepingHours$averageTime),'Group.1']
+```
+
+**Research quesion 2:**
+
+Tobacco is well known for its health consequences, hence it is necessary to undestand the impact of ciggerate on the health of its consumers.
+
+Plot comparing the health of the people who have smoked atleast 100 ciggerates vs those who have not.
+
+```{r}
+ggplot(na.omit(brfss2013),aes(genhlth,fill = genhlth)) + geom_bar() + facet_grid(.~smoke100) + xlab("Health Status") + ggtitle("Health Comparison Of Smokers(Yes) vs Non-Smokers(No)") + theme(axis.text.x = element_text(angle = 45, hjust = 1),legend.title = element_blank())
+```
+
+
+
+The plot clearly shows that people who have smoked atleast 100 ciggerates have worse health conditions than those who have smoked less than 100 ciggerates.
+
+**Research quesion 3:**
+
+Review provided by each user gives us a nice picture of wether they are satisfied with the care reveived. Regular evaluation in reviews help in providing better services and maintaining the right standard.
+
+Based on different user reviews, plotting the satisfaction with the care received
+
+```{r}
+ggplot(na.omit(brfss2013),aes(carercvd,fill=carercvd)) + geom_bar() + theme_classic() + ggtitle("Care Review") + xlab("Review Scales") + theme(legend.title=element_blank())
+```
+
+
+
+Thus here it can be seen that most of the users are very satisfied with the care received. Verifying the above plot with actual number of user reviews
+
+```{r}
+summary(na.omit(brfss2013$carercvd))
+```
+
+
+
+
